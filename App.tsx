@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Settings, Task } from './types';
 import { recalculateSchedule, generateId, formatTime } from './services/scheduler';
@@ -137,6 +138,11 @@ function App() {
   }, [settings.pomodoroDuration]);
 
   const activeTask = tasks.find(t => t.id === activeTaskId);
+
+  // Stats calculation
+  const totalPomosExpected = tasks.reduce((acc, t) => acc + t.expectedPomodoros, 0);
+  const totalPomosCompleted = tasks.reduce((acc, t) => acc + t.completedPomodoros, 0);
+  const productivity = totalPomosExpected > 0 ? Math.round((totalPomosCompleted / totalPomosExpected) * 100) : 0;
 
   // --- Helpers ---
   
@@ -425,9 +431,22 @@ function App() {
       {/* Sidebar */}
       <div className="w-96 flex flex-col border-r border-slate-800 bg-slate-950/50 backdrop-blur-xl">
         <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-          <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-cyan-400">
-            FlowState
-          </h1>
+          <div className="flex flex-col">
+            <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-cyan-400">
+              FlowState
+            </h1>
+            {totalPomosExpected > 0 && (
+                <div className="flex items-center space-x-2 mt-1">
+                    <div className="w-16 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                        <div 
+                            className="h-full bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all duration-500"
+                            style={{ width: `${productivity}%` }}
+                        />
+                    </div>
+                    <span className="text-[10px] text-slate-400 font-medium">{productivity}%</span>
+                </div>
+            )}
+          </div>
           <div className="flex items-center space-x-1">
              <button
                  onClick={handleDeleteAllTasks}
