@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Settings, Task } from './types';
 import { recalculateSchedule, generateId, formatTime } from './services/scheduler';
@@ -180,11 +179,19 @@ function App() {
     const newStatus: Task['status'] = isAlreadyCompleted ? 'pending' : 'completed';
     
     let newDuration = task.duration;
-    const projectedEnd = task.startTime + (task.duration * 60 * 1000);
     
-    // Auto-correct duration if late
-    if (!isAlreadyCompleted && now > projectedEnd) {
-        newDuration = Math.max(task.duration, Math.ceil((now - task.startTime) / 60000));
+    if (!isAlreadyCompleted) {
+         // Apply duration snap if task has ostensibly started (startTime < now).
+         // This handles:
+         // 1. Active Task: Snaps end to NOW (pushes up next tasks if early, or pushes down if late).
+         // 2. Pending (but past start time): Snaps end to NOW.
+         // 3. Future Tasks: Reset duration to 0 (skipped).
+         if (task.startTime <= now) {
+             const elapsedMinutes = Math.ceil((now - task.startTime) / 60000);
+             newDuration = Math.max(1, elapsedMinutes);
+         } else {
+             newDuration = 0;
+         }
     }
 
     if (!isAlreadyCompleted && taskId === activeTaskId) {
@@ -232,6 +239,14 @@ function App() {
       } else {
           updateSchedule(remaining);
       }
+  };
+  
+  const handleDeleteAllTasks = () => {
+    if (window.confirm("Are you sure you want to delete all tasks?")) {
+        setQueueStartTime(undefined);
+        setTasks([]);
+        setActiveTaskId(undefined);
+    }
   };
 
   const handleUpdateTask = (id: string, updates: Partial<Task>) => {
@@ -414,6 +429,14 @@ function App() {
             FlowState
           </h1>
           <div className="flex items-center space-x-1">
+             <button
+                 onClick={handleDeleteAllTasks}
+                 className="p-2 text-slate-400 hover:text-red-400 rounded-lg hover:bg-slate-800 transition-colors"
+                 title="Delete All Tasks"
+             >
+                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+             </button>
+
              <button
                onClick={handleCopyTasks}
                className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors relative"

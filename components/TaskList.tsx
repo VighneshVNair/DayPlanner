@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Task } from '../types';
 import { formatTime } from '../services/scheduler';
 
@@ -22,7 +22,16 @@ export const TaskList: React.FC<TaskListProps> = ({
   onCompleteTask,
   onReorderTasks
 }) => {
-  const [draggedIndex, setDraggedIndex] = React.useState<number | null>(null);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const editInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editingTaskId && editInputRef.current) {
+      editInputRef.current.focus();
+    }
+  }, [editingTaskId]);
 
   if (tasks.length === 0) {
     return (
@@ -63,11 +72,34 @@ export const TaskList: React.FC<TaskListProps> = ({
     if (index < tasks.length - 1) onReorderTasks(index, index + 1);
   };
 
+  const startEditing = (e: React.MouseEvent, task: Task) => {
+    e.stopPropagation();
+    if (task.status === 'completed') return;
+    setEditingTaskId(task.id);
+    setEditTitle(task.title);
+  };
+
+  const saveTitle = () => {
+    if (editingTaskId && editTitle.trim()) {
+      onUpdateTask(editingTaskId, { title: editTitle.trim() });
+    }
+    setEditingTaskId(null);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      saveTitle();
+    } else if (e.key === 'Escape') {
+      setEditingTaskId(null);
+    }
+  };
+
   return (
     <div className="space-y-3 pb-20">
       {tasks.map((task, index) => {
         const isActive = task.id === activeTaskId;
         const isCompleted = task.status === 'completed';
+        const isEditing = editingTaskId === task.id;
         const endTime = task.startTime + (task.duration * 60 * 1000);
         
         // Late detection: Only relevant if active and running over
@@ -76,15 +108,15 @@ export const TaskList: React.FC<TaskListProps> = ({
         return (
           <div 
             key={task.id}
-            draggable
+            draggable={!isEditing}
             onDragStart={(e) => handleDragStart(e, index)}
             onDragOver={(e) => handleDragOver(e, index)}
             onDrop={(e) => handleDrop(e, index)}
-            onClick={() => !isCompleted && onSelectTask(task.id)}
+            onClick={() => !isCompleted && !isEditing && onSelectTask(task.id)}
             className={`
-              group relative flex items-center p-3 rounded-xl border transition-all duration-200 cursor-pointer
+              group relative flex items-center p-3 rounded-xl border transition-all duration-200 
               ${isActive ? 'bg-indigo-900/20 border-indigo-500/50 ring-1 ring-indigo-500/50' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}
-              ${isCompleted ? 'opacity-50 grayscale' : ''}
+              ${isCompleted ? 'opacity-50 grayscale' : 'cursor-pointer'}
               ${isLate ? 'border-red-900/50 bg-red-900/5' : ''}
               ${draggedIndex === index ? 'opacity-40 border-dashed border-slate-600' : ''}
             `}
@@ -152,11 +184,30 @@ export const TaskList: React.FC<TaskListProps> = ({
 
             {/* Task Info */}
             <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between mb-1">
-                <h3 className={`font-medium truncate ${isCompleted ? 'line-through text-slate-500' : 'text-slate-200'}`}>
-                  {task.title}
-                </h3>
-                {isLate && <span className="text-[10px] text-red-500 font-bold ml-2 bg-red-900/20 px-1.5 py-0.5 rounded border border-red-900/50">LATE</span>}
+              <div className="flex items-center justify-between mb-1 h-7">
+                {isEditing ? (
+                  <input
+                    ref={editInputRef}
+                    type="text"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    onBlur={saveTitle}
+                    onKeyDown={handleKeyDown}
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-full bg-slate-800 border border-indigo-500 rounded px-2 text-white focus:outline-none"
+                  />
+                ) : (
+                  <div className="flex items-center w-full">
+                    <h3 
+                        onClick={(e) => startEditing(e, task)}
+                        className={`font-medium truncate flex-1 hover:text-indigo-300 transition-colors ${isCompleted ? 'line-through text-slate-500' : 'text-slate-200'}`}
+                        title="Click to edit title"
+                    >
+                        {task.title}
+                    </h3>
+                    {isLate && <span className="text-[10px] text-red-500 font-bold ml-2 bg-red-900/20 px-1.5 py-0.5 rounded border border-red-900/50">LATE</span>}
+                  </div>
+                )}
               </div>
               <div className="flex items-center text-xs text-slate-500 space-x-4">
                  <div className="flex items-center group/duration" onClick={(e) => e.stopPropagation()}>
@@ -169,10 +220,10 @@ export const TaskList: React.FC<TaskListProps> = ({
                                 type="number" 
                                 className="w-10 bg-transparent border-b border-slate-700 focus:border-indigo-500 focus:outline-none text-slate-300 text-center hover:border-slate-600 transition-colors"
                                 value={task.duration}
-                                min={0}
+                                min={1}
                                 onChange={(e) => {
                                     const val = parseInt(e.target.value);
-                                    if (!isNaN(val)) onUpdateTask(task.id, { duration: val });
+                                    if (!isNaN(val) && val > 0) onUpdateTask(task.id, { duration: val });
                                 }}
                             />
                             <span className="ml-1 text-slate-600">min</span>
@@ -189,8 +240,8 @@ export const TaskList: React.FC<TaskListProps> = ({
             </div>
 
             {/* Action Buttons (Visible on Hover) */}
-            {!isCompleted && (
-                <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+            {!isCompleted && !isEditing && (
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900 shadow-sm">
                     <button 
                         onClick={(e) => { e.stopPropagation(); onDeleteTask(task.id); }}
                         className="p-2 text-slate-500 hover:text-red-400 rounded-lg hover:bg-slate-800"
